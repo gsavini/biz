@@ -1,0 +1,68 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.2.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: c7d8dcc2012317ae3491863f06cfe0837faa9debefa5ca971b95bb198f0a5e5b
+
+name:           biz
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/purce/biz#readme>
+homepage:       https://github.com/purce/biz#readme
+bug-reports:    https://github.com/purce/biz/issues
+author:         Giovanni Savini
+maintainer:     giovanni.savini@stevini.it
+copyright:      Giovanni Savini (c) 2020
+license:        MIT
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/purce/biz
+
+library
+  exposed-modules: Biz.Parser
+                 , Biz.Data
+                 , Biz.Eval
+                 , Biz.Primitive
+                 , Biz.Helper
+  other-modules:
+  hs-source-dirs:
+      src
+  build-depends: base >=4.7 && <5
+               , parsec
+               , mtl
+               , containers
+               , directory
+               , filepath
+  default-language: Haskell2010
+
+executable biz
+  main-is: Main.hs
+  other-modules:
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends: base >=4.7 && <5
+               , biz
+               , parsec
+               , mtl
+  default-language: Haskell2010
+
+test-suite biz-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_biz
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , biz
+  default-language: Haskell2010
