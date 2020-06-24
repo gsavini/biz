@@ -17,7 +17,7 @@ replace a b (x:xs)
   | otherwise = x : replace a b xs
 
 mergeStands :: BizVal -> BizVal -> BizVal
-mergeStands new@(Stand name abilities1) old@(Stand _ abilities2) = Stand name $ M.union abilities1 abilities2
+mergeStands new@(Stand name abilities1 sp) old@(Stand _ abilities2 _) = Stand name (M.union abilities1 abilities2) sp
 
 -- https://stackoverflow.com/a/5852820
 replaceNth :: Int -> a -> [a] -> [a]

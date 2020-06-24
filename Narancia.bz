@@ -1,0 +1,63 @@
+part Narancia
+
+
+boingo length list : {
+       kono l 0 da
+       ger x list kono l oingo + l 1 jo da
+       arrivederci l
+       }
+
+boingo sum list : {
+       kono result 0 da
+       ger x list kono result oingo + result x jo da
+       ariariariariarri result vederci
+       }
+
+boingo recSum list :
+       which fist oingo = 0 oingo length list jojo
+       right arrivederci 0
+       left oingo + 1 oingo recSum oingo beep list jojojo
+
+boingo abs number : which fist oingo number < 0 right oingo -1 * number left number
+
+boingo power base exp : {
+
+       kono result 1 da
+       kono times oingo abs exp jo da
+
+       gold i 1 experience 1 requiem oingo i <= times
+       	    kono result oingo result * base da
+
+       which fist oingo exp > 0
+       left kono result oingo 1.0 / result da
+
+       arrivederci result
+}
+
+boingo abss number : {
+
+       number
+       which fist oingo number < 0
+       right kono number oingo -1 * number da
+       left moody blues 2
+}
+
+boingo map y list : {
+       
+       ger x list {
+       	   kono y oingo y + 1 da
+	  
+	  }
+	  
+}
+
+oingo echoes oingo length dop 1 2 3 4 5 6 pio jojo
+oingo echoes oingo sum dop 1 2 3 4 5 6 pio jojo
+speedwagon oingo echoes oingo recSum dop 1 2 3 4 5 6 pio jojo
+oingo echoes oingo power 2 5 jojo
+oingo echoes oingo abs 4 jojo
+oingo echoes oingo abss -34 jojo
+oingo echoes oingo map 0 dop 1 1 1 1 1 pio jojo
+
+
+oingo + 1 oingo + 2 oingo + 3 4 jojojo

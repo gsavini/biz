@@ -29,7 +29,8 @@ text = do
   char '"'
   x <- many $ parseEscapedChars <|> (noneOf "\"")
   char '"'
-  return $ String x
+  sp <- getPosition
+  return $ String x sp
 
 parseEscapedChars :: Parser Char
 parseEscapedChars = do
@@ -44,8 +45,12 @@ parseEscapedChars = do
 
 atom :: Parser BizVal
 atom = do
-  a <- many1 $ satisfy sat
-  return $ Atom a
+  a <- atomString
+  sp <- getPosition
+  return $ Atom a sp
+
+atomString :: Parser String
+atomString = many1 $ satisfy sat
 
 sat :: Char -> Bool
 sat c = not $ isSpace c || c `elem` ":(){}!,"
@@ -54,9 +59,10 @@ number :: Parser BizVal
 number = do
   maybeMinus <- optionMaybe $ char '-'
   num <- many1 digit
+  sp <- getPosition
   case maybeMinus of
-    Just _ -> return $ Number $ read $ '-' : num
-    Nothing -> return $ Number $ read $ num
+    Just _ -> return $ Number (read $ '-' : num) sp
+    Nothing -> return $ Number (read $ num) sp
 
 float :: Parser BizVal
 float = do
@@ -64,21 +70,24 @@ float = do
   x <- many1 digit
   char '.'
   y <- many1 digit
+  sp <- getPosition
   case maybeMinus of
-    Just _ -> return $ Number $ read ("-" ++ x ++ "." ++ y)
-    Nothing -> return $ Number $ read (x ++ "." ++ y)
+    Just _ -> return $ Number (read ("-" ++ x ++ "." ++ y)) sp
+    Nothing -> return $ Number (read (x ++ "." ++ y)) sp
 
 yes :: Parser BizVal
 yes = do
   many1 $ string "yes"
   notFollowedBy alphaNum
-  return $ Bool True
+  sp <- getPosition
+  return $ Bool True sp
 
 no :: Parser BizVal
 no = do
   many1 $ string "no"
   notFollowedBy alphaNum
-  return $ Bool False
+  sp <- getPosition
+  return $ Bool False sp
 
 funcCall :: Parser BizVal
 funcCall = do
@@ -86,7 +95,8 @@ funcCall = do
   spaces1
   func:args <- endBy (notFollowedBy (string "jo") >> expr) $ try spaces
   string "jo"
-  return $ FuncCall func args
+  sp <- getPosition
+  return $ FuncCall func args sp
 
 opCall :: Parser BizVal
 opCall = do
@@ -97,34 +107,36 @@ opCall = do
   op <- atom
   spaces1
   arg2 <- expr
-  return $ FuncCall op [arg1, arg2]
+  sp <- getPosition
+  return $ FuncCall op [arg1, arg2] sp
 
 conditional :: Parser BizVal
 conditional = do
-  try (string "which fist") <|> string "will i hit you with my right fist or my left"
+  try (string "which fist") <|> string "will i hit you with my rightBranch fist or my leftBranch"
   spaces1
   predicate <- expr
-  maybeRight <- optionMaybe (try $ spaces1 >> right)
-  maybeLeft <- optionMaybe (try $ spaces1 >> left)
-  maybeBoth <- optionMaybe (try $ spaces1 >> both)
-  return $ If predicate maybeLeft maybeRight maybeBoth
+  maybeRight <- optionMaybe (try $ spaces1 >> rightBranch)
+  maybeLeft <- optionMaybe (try $ spaces1 >> leftBranch)
+  maybeBoth <- optionMaybe (try $ spaces1 >> bothBranch)
+  sp <- getPosition
+  return $ If predicate maybeLeft maybeRight maybeBoth sp
 
-left :: Parser BizVal
-left = do
+leftBranch :: Parser BizVal
+leftBranch = do
   string "left"
   spaces1
   leftBranch <- expr
   return leftBranch
 
-right :: Parser BizVal
-right = do
+rightBranch :: Parser BizVal
+rightBranch = do
   string "right"
   spaces1
   rightBranch <- expr
   return rightBranch
 
-both :: Parser BizVal
-both = do
+bothBranch :: Parser BizVal
+bothBranch = do
   string "both"
   spaces1
   bothBranch <- expr
@@ -143,7 +155,8 @@ var = do
   spaces1
   string "da"
   let attributes = computeAttr [reliable, noDignity]
-  return $ Var name value attributes
+  sp <- getPosition
+  return $ Var name value attributes sp
 
 computeAttr :: [Maybe String] -> [VarAttribute]
 computeAttr [] = []
@@ -162,7 +175,8 @@ streak = do
   exprs <- between (char '{' >> spaces)
            (spaces >> char '}')
            (sepEndBy (spaces >>  notFollowedBy (char '}') >> topLevel) (many1 eeol >> spaces))
-  return $ Seq exprs
+  sp <- getPosition
+  return $ Seq exprs sp
 
 eeol :: Parser Char
 eeol = (endOfLine <|> newline)
@@ -175,14 +189,16 @@ funcDef = do
   string ":"
   spaces
   body <- expr
-  return $ Funcf name params body
+  sp <- getPosition
+  return $ Funcf name params body sp
 
 arrivederci :: Parser BizVal
 arrivederci =
   try (do string "arrivederci"
           spaces1
-          expression <- expr 
-          return $ Arrivederci expression
+          expression <- expr
+          sp <- getPosition
+          return $ Arrivederci expression sp
       )
   <|>
   (do many $ try $ string "ari"
@@ -191,7 +207,8 @@ arrivederci =
       expression <- expr 
       spaces1
       string "vederci"
-      return $ Arrivederci expression
+      sp <- getPosition
+      return $ Arrivederci expression sp
   )
 
 forLoop :: Parser BizVal
@@ -211,14 +228,16 @@ forLoop = do
   predicate <- parensExpr
   spaces1
   body <- parensExpr
-  return $ ForLoop localVar startingValue increase predicate body
+  sp <- getPosition
+  return $ ForLoop localVar startingValue increase predicate body sp
 
 infiniteLoop :: Parser BizVal
 infiniteLoop  = do
   try $ string "ger" <|> string "goldexperiencerequiem"
   spaces1
   body <- parensExpr
-  return $ InfiniteLoop body
+  sp <- getPosition
+  return $ InfiniteLoop body sp
 
 doppioLoop :: Parser BizVal
 doppioLoop  = do
@@ -229,31 +248,35 @@ doppioLoop  = do
   bv <- expr
   spaces1
   body <- expr
-  return $ DoppioLoop localVar bv body
+  sp <- getPosition
+  return $ DoppioLoop localVar bv body sp
 
 mista :: Parser BizVal
 mista  = do
   string "mista"
   spaces1
-  expression <- expr 
-  return $ Mista expression
-
+  expression <- expr
+  sp <- getPosition
+  return $ Mista expression sp
 kingCrimson :: Parser BizVal
 kingCrimson  = do
   ((string "king" <|> string "emperor") >> spaces >> string "crimson")
     <|> string "i erased time and leapt past it"
-  return $ KingCrimson
+  sp <- getPosition
+  return $ KingCrimson sp
   
 doppio :: Parser BizVal
 doppio =
   (do try $ string "doppio"
-      return $ Doppio []) <|>
+      sp <- getPosition
+      return $ Doppio [] sp) <|>
   (do
       string "dop"
       spaces1
       values <- endBy ((try $ notFollowedBy $ string "pio") >> expr) $ try spaces1
       string "pio"
-      return $ Doppio values)
+      sp <- getPosition
+      return $ Doppio values sp)
 
 dururu :: Parser BizVal
 dururu  = do
@@ -261,8 +284,9 @@ dururu  = do
   rus <- many $ string "ru"
   spaces1
   maybeMoshi <- optionMaybe $ moshimoshi
-  doppio <- expr 
-  return $ Dururu (flip (-) 1. toInteger . length $ rus) (maybeMoshi) doppio
+  doppio <- expr
+  sp <- getPosition
+  return $ Dururu (flip (-) 1. toInteger . length $ rus) (maybeMoshi) doppio sp
 
 rurudu :: Parser BizVal
 rurudu  = do
@@ -270,8 +294,9 @@ rurudu  = do
   string "du"
   spaces1
   maybeMoshi <- optionMaybe $ moshimoshi
-  doppio <- expr 
-  return $ Rurudu (flip (-) 1. toInteger . length $ rus) (maybeMoshi) doppio
+  doppio <- expr
+  sp <- getPosition
+  return $ Rurudu (flip (-) 1. toInteger . length $ rus) (maybeMoshi) doppio sp
 
 moshimoshi :: Parser BizVal
 moshimoshi = do
@@ -287,7 +312,8 @@ part = do
   spaces1
   first <- letter
   rest <- many1 (letter <|> char '.')
-  return $ Part (first:rest)
+  sp <- getPosition
+  return $ Part (first:rest) sp
 
 skipPart :: Parser BizVal
 skipPart = do
@@ -295,7 +321,8 @@ skipPart = do
   spaces1
   first <- letter
   rest <- many1 (letter <|> char '.')
-  return $ SkipPart (first:rest) Nothing
+  sp <- getPosition
+  return $ SkipPart (first:rest) Nothing sp
 
 skipPartAs :: Parser BizVal
 skipPartAs = do
@@ -307,14 +334,16 @@ skipPartAs = do
   string "as"
   spaces1
   name <- many1 letter
-  return $ SkipPart (first:rest) (Just name)
+  sp <- getPosition
+  return $ SkipPart (first:rest) (Just name) sp
 
 user :: Parser BizVal
 user = do
   string "user"
   spaces
   userName <- many1 letter
-  return $ User userName M.empty
+  sp <- getPosition
+  return $ User userName M.empty sp
 
 stand :: Parser BizVal
 stand  = do
@@ -325,9 +354,10 @@ stand  = do
     spaces
     abilities <- between (char ':') (spaces >> char ':') (sepBy (spaces >> standAbility) (try $ spaces >> char ';'))
     return abilities
+  sp <- getPosition
   case maybeAbilities of
-    Nothing -> return $ Stand name (M.empty)
-    Just abilities -> return $ Stand name (fromList abilities)
+    Nothing -> return $ Stand name (M.empty) sp
+    Just abilities -> return $ Stand name (fromList abilities) sp
 
 standAbility :: Parser (String, BizVal)
 standAbility = do
@@ -342,8 +372,9 @@ arrowSingle :: Parser BizVal
 arrowSingle  = do
   string "->"
   spaces
-  userOrStand <- expr 
-  return $ SingleArrow userOrStand
+  userOrStand <- expr
+  sp <- getPosition
+  return $ SingleArrow userOrStand sp
 
 ability :: Parser BizVal
 ability = do
@@ -352,7 +383,8 @@ ability = do
   name <- many1 letter
   spaces1
   value <- topLevel
-  return $ Ability name value
+  sp <- getPosition
+  return $ Ability name value sp
 
 parens = between (char '(' >> spaces) (spaces >> char ')') --Tokens.parens haskell
 identifier = Tokens.identifier haskell
@@ -364,26 +396,33 @@ infixLeft operator func =
 infixRight operator func =
   Expr.Infix (spaces >> reserved operator >> spaces >> return func) Expr.AssocRight
 
-infixRightArrow =
-  Expr.buildExpressionParser table (notFollowedBy newline >> expr)
+infixRightArrow :: Parser BizVal
+infixRightArrow = do
+  sp <- getPosition
+  Expr.buildExpressionParser (table sp) (notFollowedBy newline >> expr)
   where
-    table = [[infixLeft "->" Arrow]]
+    table sp = [[infixLeft "->" (Arrow sp)]]
 
-infixLeftArrow =
-  Expr.buildExpressionParser table (expr)
+infixLeftArrow :: Parser BizVal
+infixLeftArrow = do
+  sp <- getPosition
+  Expr.buildExpressionParser (table sp) (expr)
   where
-    table = [[infixRight "<-" (flip Arrow)]]
+    table sp = [[infixRight "<-" (flip (Arrow sp))]]
 
 
 cry :: Parser BizVal
 cry = do
   items <- endBy1 expr (try (many1 (char '!')))
-  return $ Cry items
+  sp <- getPosition
+  return $ Cry items sp
 
+{-
 freccia :: Parser (BizVal -> BizVal -> BizVal)
 freccia = do
   string "->"
   return Arrow
+-}
 
 holHorse :: Parser BizVal
 holHorse = do
@@ -391,11 +430,12 @@ holHorse = do
   spaces
   string "horse"
   spaces1
-  params <- sepEndBy atom $ spaces
+  params <- sepEndBy (atomString) $ spaces
   char ':'
   spaces
-  body <- try $ expr 
-  return $ HolHorse params body
+  body <- try $ expr
+  sp <- getPosition
+  return $ HolHorse params body sp
 
 killerQueen :: Parser BizVal
 killerQueen = do
@@ -403,8 +443,9 @@ killerQueen = do
   spaces1
   string "queen"
   spaces1
-  a <- atom
-  return $ KillerQueen a
+  a <- atomString
+  sp <- getPosition
+  return $ KillerQueen a sp
 
 bitesTheDust :: Parser BizVal
 bitesTheDust = do
@@ -414,15 +455,17 @@ bitesTheDust = do
   spaces1
   (string "dusto" <|> string "dust")
   spaces1
-  a <- atom
-  return $ BitesTheDust a
+  a <- atomString
+  sp <- getPosition
+  return $ BitesTheDust a sp
 
 theHand :: Parser BizVal
 theHand = do
   (string "za" >> spaces1 >> string "hando") <|> (string "the" >> spaces1 >> string "hand")
   spaces1
-  a <- atom
-  return $ TheHand a
+  a <- atomString
+  sp <- getPosition
+  return $ TheHand a sp
 
 moodyBlues :: Parser BizVal
 moodyBlues = do
@@ -431,7 +474,8 @@ moodyBlues = do
   string "blues"
   spaces1
   num <- many1 digit
-  return $ MoodyBlues (read num)
+  sp <- getPosition
+  return $ MoodyBlues (read num) sp
 
 girlsDontLikeGuys :: Parser BizVal
 girlsDontLikeGuys = do
@@ -448,7 +492,8 @@ girlsDontLikeGuys = do
   items <- between (char '{' >> spaces)
            (spaces >> char '}')
            (sepEndBy (spaces >>  notFollowedBy (char '}') >> girlsItem) (many1 eeol >> spaces))
-  return $ GirlsDontLikeGuys val predicate items
+  sp <- getPosition
+  return $ GirlsDontLikeGuys val predicate items sp
 
 girlsItem :: Parser BizVal
 girlsItem = do
@@ -457,7 +502,8 @@ girlsItem = do
   char ':'
   spaces
   result <- expr
-  return $ GirlItem val result
+  sp <- getPosition
+  return $ GirlItem val result sp
 
 porcaMiseria :: Parser BizVal
 porcaMiseria = do
@@ -465,17 +511,19 @@ porcaMiseria = do
   spaces
   string "miseria"
   spaces1
-  errorOrigin <- many1 $ satisfy sat
+  errorOrigin <- atomString
   spaces1
   bizVal <- expr
-  return $ PorcaMiseria errorOrigin bizVal
+  sp <- getPosition
+  return $ PorcaMiseria errorOrigin bizVal sp
 
 cazzo :: Parser BizVal
 cazzo = do
   string "cazzo"
   spaces1
   error <- expr
-  return $ Cazzo error
+  sp <- getPosition
+  return $ Cazzo error sp
 
 crepa :: Parser BizVal
 crepa = do
@@ -483,10 +531,13 @@ crepa = do
   spaces1
   errorName <- many1 $ satisfy sat
   maybeData <- optionMaybe $ try (spaces1 >> expr)
-  return $ Crepa $ CustomError errorName maybeData
+  sp <- getPosition
+  return $ Crepa errorName maybeData sp
+  --return $ Crepa (CustomError errorName maybeData sp) sp
   
 topLevel :: Parser BizVal
-topLevel =
+topLevel = do
+  sp <- getPosition
   try cry
   <|> try infixRightArrow
   <|> try infixLeftArrow
@@ -498,12 +549,12 @@ parensExpr = try (parens expr) <|> expr
 
 expr :: Parser BizVal
 expr =
-  try (parens infixLeftArrow)
-  <|> try (parens infixRightArrow)
+  try (parens $ infixLeftArrow)
+  <|> try (parens $ infixRightArrow)
   <|> try (parens cry)
-  <|> text
+  <|> Biz.Parser.text
   <|> try float
-  <|> try number
+  <|> try Biz.Parser.number
   <|> try yes
   <|> try no
   <|> streak
@@ -518,7 +569,7 @@ expr =
   <|> try arrivederci
   -- <|> try mista
   <|> try kingCrimson
-  <|> try doppio
+  <|> try Biz.Parser.doppio
   <|> try dururu
   <|> try rurudu
   <|> try part
@@ -534,6 +585,6 @@ expr =
   <|> try girlsDontLikeGuys
   <|> try porcaMiseria
   <|> try cazzo
-  <|> try crepa
+  <|> try Biz.Parser.crepa
   <|> try var
   <|> atom

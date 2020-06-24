@@ -8,8 +8,9 @@ import System.IO
 import Control.Monad (liftM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Except (throwError, runExceptT, catchError)
+import Text.ParserCombinators.Parsec.Pos
 
-primitives :: [(String, [BizVal] -> ThrowsError BizVal)]
+primitives :: [(String, [BizVal] -> ErrorInfo -> ThrowsError BizVal)]
 primitives = [ ("+", numBinop (+))
              , ("-", numBinop (-))
              , ("*", numBinop (*))
@@ -32,53 +33,53 @@ primitives = [ ("+", numBinop (+))
              , ("ru", ru)
              ]
 
-unpackNum :: BizVal -> ThrowsError Double
-unpackNum (Number n) = return n
-unpackNum notNum = throwError $ TypeMismatch "number" notNum
+unpackNum :: BizVal -> ErrorInfo -> ThrowsError Double
+unpackNum (Number n _) _ = return n
+unpackNum notNum ei = throwError $ TypeMismatch "number" notNum ei
 
-unpackText :: BizVal -> ThrowsError String
-unpackText (String s) = return s
-unpackText notString  = throwError $ TypeMismatch "string" notString
+unpackText :: BizVal -> ErrorInfo -> ThrowsError String
+unpackText (String s _) _ = return s
+unpackText notString ei = throwError $ TypeMismatch "string" notString ei
 
-unpackBool :: BizVal -> ThrowsError Bool
-unpackBool (Bool b) = return b
-unpackBool notBool  = throwError $ TypeMismatch "boolean" notBool
+unpackBool :: BizVal -> ErrorInfo -> ThrowsError Bool
+unpackBool (Bool b _) _ = return b
+unpackBool notBool ei = throwError $ TypeMismatch "boolean" notBool ei
 
-unpackDoppio :: BizVal -> ThrowsError [BizVal]
-unpackDoppio (Doppio list) = return list
-unpackDoppio notDoppio = throwError $ TypeMismatch "doppio" notDoppio
+unpackDoppio :: BizVal -> ErrorInfo -> ThrowsError [BizVal]
+unpackDoppio (Doppio list _) _ = return list
+unpackDoppio notDoppio ei = throwError $ TypeMismatch "doppio" notDoppio ei
 
-throwNumArgs :: Integer -> [BizVal] -> ThrowsError BizVal
-throwNumArgs expected args = throwError $ NumArgs expected (toInteger . length $ args)
+throwNumArgs :: Integer -> [BizVal] -> ErrorInfo -> ThrowsError BizVal
+throwNumArgs expected args ei = throwError $ NumArgs expected (toInteger . length $ args) ei
 
-numBinop :: (Double -> Double -> Double) -> [BizVal] -> ThrowsError BizVal
-numBinop op args
-  | length args /= 2 = throwNumArgs 2 args
+numBinop :: (Double -> Double -> Double) -> [BizVal] -> ErrorInfo -> ThrowsError BizVal
+numBinop op args ei
+  | length args /= 2 = throwNumArgs 2 args ei
   | otherwise = do
-      res <- op <$> unpackNum (args !! 0) <*> unpackNum (args !! 1)
-      return $ Number res
+      res <- op <$> unpackNum (args !! 0) ei <*> unpackNum (args !! 1) ei
+      return $ Number res pos
 
-boolBinop :: (BizVal -> ThrowsError a) -> (a -> a -> Bool) -> [BizVal] -> ThrowsError BizVal
-boolBinop unpacker op args
-  | length args /= 2 = throwNumArgs 2 args
+boolBinop :: (BizVal -> ErrorInfo -> ThrowsError a) -> (a -> a -> Bool) -> [BizVal] -> ErrorInfo -> ThrowsError BizVal
+boolBinop unpacker op args ei
+  | length args /= 2 = throwNumArgs 2 args ei
   | otherwise = do
-      res <- op <$> unpacker (args !! 0) <*> unpacker (args !! 1)
-      return $ Bool res
+      res <- op <$> unpacker (args !! 0) ei <*> unpacker (args !! 1) ei
+      return $ Bool res pos
 
 numBoolBinop  = boolBinop unpackNum
 boolBoolBinop = boolBinop unpackBool
 
-equal :: [BizVal] -> ThrowsError BizVal
-equal args
-  | length args /= 2 = throwNumArgs 2 args
-  | otherwise = return $ Bool $ (args !! 0) == (args !! 1)
+equal :: [BizVal] -> ErrorInfo -> ThrowsError BizVal
+equal args ei
+  | length args /= 2 = throwNumArgs 2 args ei
+  | otherwise = return $ Bool ((args !! 0) == (args !! 1)) pos
 
-notEqual :: [BizVal] -> ThrowsError BizVal
-notEqual args = do
-  boolVal <- equal args
+notEqual :: [BizVal] -> ErrorInfo -> ThrowsError BizVal
+notEqual args ei = do
+  boolVal <- equal args ei
   case boolVal of
-    Bool v -> return $ Bool (not v)
-    _ -> return $ Bool True
+    Bool v _-> return $ Bool (not v) pos
+    _ -> return $ Bool True pos
 
 xor :: Bool -> Bool -> Bool
 xor b1 b2 = b1 /= b2
@@ -86,62 +87,65 @@ xor b1 b2 = b1 /= b2
 xand :: Bool -> Bool -> Bool
 xand b1 b2 = b1 == b2
 
-peliNel :: [BizVal] -> ThrowsError BizVal
-peliNel args
-  | length args /= 1 = throwNumArgs 1 args
+peliNel :: [BizVal] -> ErrorInfo -> ThrowsError BizVal
+peliNel args ei
+  | length args /= 1 = throwNumArgs 1 args ei
   | otherwise = let bv = args !! 1
                 in case bv of
-                     Crepa (CustomError _ (Just a)) -> return a
-                     Crepa (CustomError _ Nothing) -> throwError $ CrepaWithoutPeli bv
-                     notCrepa -> throwError $ TypeMismatch "crepa" notCrepa
+                     CrepaBizError (CustomError _ (Just value) _) _-> return value
+                     CrepaBizError (CustomError _ Nothing ei) _ -> throwError $ CrepaWithoutPeli bv ei
+                     notCrepa -> throwError $ TypeMismatch "crepa" notCrepa ei
 
-textOf :: [BizVal] -> ThrowsError BizVal
-textOf args
-  | length args /= 1 = throwNumArgs 1 args
+textOf :: [BizVal] -> ErrorInfo -> ThrowsError BizVal
+textOf args ei
+  | length args /= 1 = throwNumArgs 1 args ei
   | otherwise = let bv = args !! 0
                 in case bv of
-                     String s -> return bv
-                     _ -> return $ String $ show bv
+                     String s _ -> return bv
+                     bv -> return $ String (show bv) (sourcePos bv)
 
-appendText :: [BizVal] -> ThrowsError BizVal
-appendText args
-  | length args /= 2 = throwNumArgs 2 args
+appendText :: [BizVal] -> ErrorInfo -> ThrowsError BizVal
+appendText args ei
+  | length args /= 2 = throwNumArgs 2 args ei
   | otherwise = do
-      s1 <- unpackText (args !! 0)
-      s2 <- unpackText (args !! 1)
-      return $ String (s1 ++ s2)
+      s1 <- unpackText (args !! 0) ei
+      s2 <- unpackText (args !! 1) ei
+      return $ String (s1 ++ s2) (sourcePos $ args !! 1)
 
-beep :: [BizVal] -> ThrowsError BizVal
-beep args
-  | length args /= 1 = throwNumArgs 1 args
+beep :: [BizVal] -> ErrorInfo -> ThrowsError BizVal
+beep args ei
+  | length args /= 1 = throwNumArgs 1 args ei
   | otherwise = do
-      list <- unpackDoppio $ args !! 0
-      return . Doppio . tail $ list
+      list <- unpackDoppio (args !! 0) ei
+      return $ Doppio (tail list) pos
 
-du :: [BizVal] -> ThrowsError BizVal
-du args
-  | length args /= 2 = throwNumArgs 1 args
+du :: [BizVal] -> ErrorInfo -> ThrowsError BizVal
+du args ei
+  | length args /= 2 = throwNumArgs 1 args ei
   | otherwise = do
-       list <- (unpackDoppio $ args !! 1)
-       return $ Doppio $ (args !! 0) : list
+       list <- unpackDoppio (args !! 1) ei
+       return $ Doppio ((args !! 0) : list) pos
 
-ru :: [BizVal] -> ThrowsError BizVal
-ru args
-  | length args /= 2 = throwNumArgs 1 args
+ru :: [BizVal] -> ErrorInfo -> ThrowsError BizVal
+ru args ei
+  | length args /= 2 = throwNumArgs 1 args ei
   | otherwise = do
-      list <- (unpackDoppio $ args !! 1)
-      return $ Doppio $ list ++ [args !! 0]
+      list <- unpackDoppio (args !! 1) ei
+      return $ Doppio (list ++ [args !! 0]) pos
 
-ioPrimitives :: [(String, [BizVal] -> IOThrowsError BizVal)]
+ioPrimitives :: [(String, [BizVal] -> ErrorInfo -> IOThrowsError BizVal)]
 ioPrimitives = [("echoes", writeProc)
                ]
                
-makePort :: IOMode -> [BizVal] -> IOThrowsError BizVal
-makePort mode [String filename] = liftM Port $ liftIO $ openFile filename mode
+--makePort :: IOMode -> [BizVal] -> IOThrowsError BizVal
+--makePort mode [String filename Nothing] = liftM $ Port (liftIO $ openFile filename mode) Nothing
 
-writeProc :: [BizVal] -> IOThrowsError BizVal
-writeProc [obj]            = writeProc [obj, Port stdout]
-writeProc [obj, Port port] = liftIO $ hPrint port obj >> (return $ Bool True)
+writeProc :: [BizVal] -> ErrorInfo -> IOThrowsError BizVal
+writeProc [obj] ei = writeProc [obj, Port stdout pos] ei
+writeProc [obj, Port port _] ei = liftIO $ hPrint port obj >> (return $ Bool True pos)
 
-readContents :: [BizVal] -> IOThrowsError BizVal
-readContents [String filename] = liftM String $ liftIO $ readFile filename
+--readContents :: [BizVal] -> IOThrowsError BizVal
+--readContents [String filename Nothing] = liftM $ String (liftIO $ readFile filename) Nothing
+
+pos :: SourcePos
+pos = newPos "" 0 0
